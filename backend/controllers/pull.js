@@ -1,51 +1,63 @@
 const fs = require("fs").promises;
 const path = require("path");
-const supabase  = require("../config/supabase");
-//
+const { supabase, S3_BUCKET } = require("../config/supabase");
 
-async function pullRepo() {
-  const repoPath = path.resolve(process.cwd(), ".apnaGit");
-  const commitsPath = path.join(repoPath, "commits");
+async function listAllFiles(supabase, bucket, folder) {
+    const { data: objects, error } = await supabase.storage
+        .from(bucket)
+        .list(folder);
 
-  try {
-    // List all folders inside commits/ bucket (same as listObjectsV2)
-    const { data: folders, error: folderError } = await supabase.storage
-      .from('repos')
-      .list('commits');
+    if (error) throw error;
 
-    if (folderError) throw new Error(folderError.message);
+    let allFiles = [];
 
-    for (const folder of folders) {
-      // List all files inside each uuid folder
-      const { data: files, error: filesError } = await supabase.storage
-        .from('repos')
-        .list(`commits/${folder.name}`);
+    for (const obj of objects) {
+        const fullPath = `${folder}/${obj.name}`;
 
-      if (filesError) throw new Error(filesError.message);
-
-      // Create local uuid folder if it doesn't exist (same as mkdir)
-      const commitDir = path.join(commitsPath, folder.name);
-      await fs.mkdir(commitDir, { recursive: true });
-
-      for (const file of files) {
-        // Download each file (same as getObject)
-        const { data, error } = await supabase.storage
-          .from('repos')
-          .download(`commits/${folder.name}/${file.name}`);
-
-        if (error) throw new Error(error.message);
-
-        // Save file locally (same as writeFile)
-        const buffer = Buffer.from(await data.arrayBuffer());
-        await fs.writeFile(path.join(commitDir, file.name), buffer);
-      }
+        if (obj.metadata === null) {
+            // ✅ Yeh folder hai — recursively jaao andar
+            const nested = await listAllFiles(supabase, bucket, fullPath);
+            allFiles = allFiles.concat(nested);
+        } else {
+            // ✅ Yeh actual file hai
+            allFiles.push(fullPath);
+        }
     }
 
-    console.log("All commits pulled from Supabase.");
+    return allFiles;
+}
 
-  } catch (err) {
-    console.error("Unable to pull : ", err);
-  }
+async function pullRepo() {
+    const repoPath = path.resolve(process.cwd(), ".apnaGit");
+
+    try {
+        // ✅ Ab sari nested files milegi
+        const allFiles = await listAllFiles(supabase, S3_BUCKET, "commits");
+        console.log(`🔍 Total files found in cloud: ${allFiles.length}`);
+
+        for (const relativePath of allFiles) {
+            const localFilePath = path.join(repoPath, relativePath);
+            await fs.mkdir(path.dirname(localFilePath), { recursive: true });
+
+            const { data: blob, error: downloadError } = await supabase.storage
+                .from(S3_BUCKET)
+                .download(relativePath);
+
+            if (downloadError) {
+                console.error(`❌ Error downloading ${relativePath}:`, downloadError.message);
+                continue;
+            }
+
+            const buffer = Buffer.from(await blob.arrayBuffer());
+            await fs.writeFile(localFilePath, buffer);
+            console.log(`✅ Pulled & Saved: ${relativePath}`);
+        }
+
+        console.log("\n✨ Pull process completed successfully!");
+
+    } catch (err) {
+        console.error("❌ Fatal Error during pull:", err.message);
+    }
 }
 
 module.exports = { pullRepo };

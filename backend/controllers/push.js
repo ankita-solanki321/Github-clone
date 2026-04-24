@@ -1,48 +1,43 @@
-const fs = require('fs');
-const path = require('path');
-const supabase  = require("../config/supabase");
+const fs = require("fs").promises;
+const path = require("path");
+const { supabase, S3_BUCKET } = require("../config/supabase");
 
 async function pushRepo() {
-  const commitsPath = path.resolve(process.cwd(), '.apnaGit', 'commits');
+    // Current working directory mein .meraGit ka path nikalna
+    const repoPath = path.resolve(process.cwd(), ".apnaGit");
+    const commitsPath = path.join(repoPath, "commits");
 
-  // Read all uuid folders inside commits/
-  const folders = fs.readdirSync(commitsPath);
+    try {
+        // Commits folder ke andar saare folders (Commit IDs) ki list lena
+        const commitDirs = await fs.readdir(commitsPath);
 
-  if (folders.length === 0) {
-    console.log('❌ No commits found to push!');
-    return;
-  }
+        for (const commitDir of commitDirs) {
+            const commitPath = path.join(commitsPath, commitDir);
+            const files = await fs.readdir(commitPath);
 
-  for (const folder of folders) {
-    const folderPath = path.join(commitsPath, folder);
+            for (const file of files) {
+                const filePath = path.join(commitPath, file);
+                const fileContent = await fs.readFile(filePath);
 
-    // Skip if not a folder
-    const stat = fs.statSync(folderPath);
-    if (!stat.isDirectory()) continue;
+                // Supabase Storage Upload Syntax
+                const { data, error } = await supabase.storage
+                    .from(S3_BUCKET) // "repo-bucket"
+                    .upload(`commits/${commitDir}/${file}`, fileContent, {
+                        upsert: true // Agar file pehle se hai toh overwrite kar do
+                    });
 
-    // Read all files inside uuid folder
-    const files = fs.readdirSync(folderPath);
+                if (error) {
+                    console.error(`❌ Error pushing ${file}:`, error.message);
+                } else {
+                    console.log(`✅ Pushed: ${commitDir}/${file}`);
+                }
+            }
+        }
 
-    for (const file of files) {
-      const filePath = path.join(folderPath, file);
-      const data = fs.readFileSync(filePath);
-
-      // Upload as commits/uuid/filename
-      const { error } = await supabase.storage
-        .from('repos')
-        .upload(`commits/${folder}/${file}`, data, {
-          upsert: true
-        });
-
-      if (error) {
-        console.log(`❌ Failed to push ${file}:`, error.message);
-      } else {
-        console.log(`✅ Pushed ${folder}/${file} successfully!`);
-      }
+        console.log("✨ All commits pushed to Supabase Cloud.");
+    } catch (err) {
+        console.error("❌ Error pushing to Supabase:", err);
     }
-  }
-
-  console.log('🎉 All commits pushed!');
 }
 
 module.exports = { pushRepo };

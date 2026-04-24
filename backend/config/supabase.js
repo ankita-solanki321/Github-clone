@@ -1,10 +1,13 @@
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const { createClient } = require("@supabase/supabase-js");
+require("dotenv").config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-module.exports = supabase;
+// Connection Client create karna
+const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Yahan "commits" ko hata kar "repo-bucket" kar do
+const S3_BUCKET = "repo-bucket"; 
+
+module.exports = { supabase, S3_BUCKET };
