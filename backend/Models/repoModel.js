@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 const RepositorySchema = new Schema({
-  timestamps: true,
+ 
   name: {
     type: String,
     required: true,
@@ -30,7 +30,9 @@ const RepositorySchema = new Schema({
       ref: "Issue",
     },
   ],
-});
+},
+ {timestamps: true,}
+);
 
 const Repository = mongoose.model("Repository", RepositorySchema);
 module.exports = Repository

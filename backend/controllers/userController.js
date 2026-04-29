@@ -10,12 +10,22 @@ const uri = process.env.MONGODB_URI;
 
 let client;
 
+// async function connectClient() {
+//   if (!client) {
+//     client = new MongoClient(uri); // ✅ no options needed
+//     await client.connect();
+//     console.log("MongoDb Connected!");
+//   }
+// }
+
 async function connectClient() {
   if (!client) {
-    client = new MongoClient(uri); // ✅ no options needed
+    client = new MongoClient(uri);
     await client.connect();
+    client = client; // ensure same instance
     console.log("MongoDb Connected!");
   }
+  return client; // 👈 return the client
 }
 
 module.exports = { connectClient, client };
@@ -23,7 +33,7 @@ module.exports = { connectClient, client };
 async function signUp(req, res) {
   const { username, password, email } = req.body;
   try {
-    await connectClient();
+        const client = await connectClient();
     const db = client.db("Github-clone");
     const usersCollection = db.collection("users");
 
@@ -61,7 +71,7 @@ async function signUp(req, res) {
 async function login(req, res) {
   const { email, password } = req.body;
   try {
-    await connectClient();
+       const client = await connectClient();
     const db = client.db("Github-clone");
     const usersCollection = db.collection("users");
 
@@ -87,7 +97,7 @@ async function login(req, res) {
 
 async function getAllUsers (req,res) {
    try{
-   await connectClient();
+       const client = await connectClient();
     const db = client.db("Github-clone");
     const usersCollection = db.collection("users");
     
@@ -105,7 +115,7 @@ async function getUserProfile(req, res) {
   const currentID = req.params.id;
 
   try {
-    await connectClient();
+       const client = await connectClient();
     const db = client.db("Github-clone");
     const usersCollection = db.collection("users");
 
@@ -124,12 +134,61 @@ async function getUserProfile(req, res) {
   }
 }
 
-const updateUserProfile = (req,res) =>{
-    res.send("Update Profile");
+async function updateUserProfile(req, res) {
+  const currentID = req.params.id;
+  const { email, password } = req.body;
+
+  try {
+       const client = await connectClient();
+    const db = client.db("Github-clone");
+    const usersCollection = db.collection("users");
+
+    let updateFields = { email };
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+      updateFields.password = hashedPassword;
+    }
+
+    const result = await usersCollection.findOneAndUpdate(
+      {
+        _id: new ObjectId(currentID),
+      },
+      { $set: updateFields },
+      { returnDocument: "after" } // after updation result dikh jane chahiye
+    );
+    if (!result.value) {
+      return res.status(404).json({ message: "User not found!" });
+    }
+
+    res.send(result.value);
+  } catch (err) {
+    console.error("Error during updating : ", err.message);
+    res.status(500).send("Server error!");
+  }
 }
 
-const deleteUserProfile = (req,res) =>{
-    res.send("Delete profile");
+async function deleteUserProfile(req, res) {
+  const currentID = req.params.id;
+
+  try {
+       const client = await connectClient();
+    const db = client.db("Github-clone");
+    const usersCollection = db.collection("users");
+
+    const result = await usersCollection.deleteOne({
+      _id: new ObjectId(currentID),
+    });
+
+    if (result.deleteCount == 0) {
+      return res.status(404).json({ message: "User not found!" });
+    }
+
+    res.json({ message: "User Profile Deleted!" });
+  } catch (err) {
+    console.error("Error during updating : ", err.message);
+    res.status(500).send("Server error!");
+  }
 }
 
 module.exports ={
