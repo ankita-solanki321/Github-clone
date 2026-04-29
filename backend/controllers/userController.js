@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { MongoClient } = require("mongodb");
 const dotenv = require("dotenv");
+var ObjectId = require("mongodb").ObjectId; // why we use this bcz when we fetching Id from url so we have to convert this in mongodb ID formate bcz agar hu use string pass karenege to its not a match
 
 dotenv.config();
 const uri = process.env.MONGODB_URI;
@@ -84,14 +85,43 @@ async function login(req, res) {
   }
 }
 
-const getAllUsers = (req,res) =>{
-    res.send("all users fetched!!");
+async function getAllUsers (req,res) {
+   try{
+   await connectClient();
+    const db = client.db("Github-clone");
+    const usersCollection = db.collection("users");
+    
+    const users = await usersCollection.find({}).toArray(); // why we used this .toArray() ---> bcz when we fetch from databse we get data in form of object so we have to convert it into javascript object explicitly
+    res.json(users);
+   }catch(err){
+      console.error("Error during login : ", err.message);
+    res.status(500).send("Server error!");
+   }
 }
 
 
+//INDIVIDUAL USER PROFILE
+async function getUserProfile(req, res) {
+  const currentID = req.params.id;
 
-const getUserProfile = (req,res) =>{
-    res.send("user fetched!!");
+  try {
+    await connectClient();
+    const db = client.db("Github-clone");
+    const usersCollection = db.collection("users");
+
+    const user = await usersCollection.findOne({
+         _id: new ObjectId(currentID),// here currentID is in string thats why we require above object id etc  ("Hey MongoDB, I know this ID looks like a normal string, but convert it to your special ObjectId format so you can find the matching user.")
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found!" });
+    }
+
+    res.send(user);
+  } catch (err) {
+    console.error("Error during fetching : ", err.message);
+    res.status(500).send("Server error!");
+  }
 }
 
 const updateUserProfile = (req,res) =>{
