@@ -75,23 +75,89 @@ async function fetchRepositoryByName(req, res) {
     res.status(500).send("Server error");
   }
 }
+//this last four functionality is usefull for thw user who logged in
 
-const fetchRepositoriesForCurrentUser = (req ,res) =>{
-    res.send("REpo for current user");
-    
-}
-const updateRepositoryById = (req ,res) =>{
-    res.send("update repo");
-    
+
+async function fetchRepositoriesForCurrentUser(req, res) {
+  console.log(req.params);
+  const { userID } = req.params;
+
+  try {
+    const repositories = await Repository.find({ owner: userID });
+
+    if (!repositories || repositories.length == 0) {
+      return res.status(404).json({ error: "User Repositories not found!" });
+    }
+    console.log(repositories);
+    res.json({ message: "Repositories found!", repositories });
+  } catch (err) {
+    console.error("Error during fetching user repositories : ", err.message);
+    res.status(500).send("Server error");
+  }
 }
 
-const toggleVisibilityById = (req ,res) =>{
-    res.send("Visibility toggled");
-    
+
+async function updateRepositoryById(req, res) {
+  const { id } = req.params;
+  const { content, description } = req.body;
+
+  try {
+    const repository = await Repository.findById(id);
+    if (!repository) {
+      return res.status(404).json({ error: "Repository not found!" });
+    }
+
+    repository.content.push(content);
+    repository.description = description;
+
+    const updatedRepository = await repository.save();
+
+    res.json({
+      message: "Repository updated successfully!",
+      repository: updatedRepository,
+    });
+  } catch (err) {
+    console.error("Error during updating repository : ", err.message);
+    res.status(500).send("Server error");
+  }
 }
-const deleteRepositoryById = (req ,res) =>{
-    res.send("Repository deleted");
-    
+
+async function toggleVisibilityById(req, res) {
+  const { id } = req.params;
+
+  try {
+    const repository = await Repository.findById(id);
+    if (!repository) {
+      return res.status(404).json({ error: "Repository not found!" });
+    }
+
+    repository.visibility = !repository.visibility;
+
+    const updatedRepository = await repository.save();
+
+    res.json({
+      message: "Repository visibility toggled successfully!",
+      repository: updatedRepository,
+    });
+  } catch (err) {
+    console.error("Error during toggling visibility : ", err.message);
+    res.status(500).send("Server error");
+  }
+}
+
+async function deleteRepositoryById(req, res) {
+  const { id } = req.params;
+  try {
+    const repository = await Repository.findByIdAndDelete(id);
+    if (!repository) {
+      return res.status(404).json({ error: "Repository not found!" });
+    }
+
+    res.json({ message: "Repository deleted successfully!" });
+  } catch (err) {
+    console.error("Error during deleting repository : ", err.message);
+    res.status(500).send("Server error");
+  }
 }
 
 module.exports = {
